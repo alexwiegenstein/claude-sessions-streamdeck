@@ -1,6 +1,6 @@
 {
   "name": "claude-sessions-streamdeck",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Stream Deck plugin that shows the state of Claude desktop sessions and opens them on key press",
   "author": "Alex Wiegenstein",
   "license": "MIT",

@@ -29,6 +29,11 @@ export class Transcript {
 	readonly #open = new Map<string, Task>();
 	/** Since the current turn began: was a question asked in the closing box? */
 	#asked = false;
+	/**
+	 * Whether the last turn has ended (a stop-hook summary followed the last assistant message).
+	 * A queued notification picked up while a turn is still in flight is folded into that turn and does not start a new one.
+	 */
+	#turnEnded = true;
 	/** Since the current turn began: the main session's last answer text. */
 	#lastText = "";
 
@@ -41,6 +46,7 @@ export class Transcript {
 			this.#offset = 0;
 			this.#partial = "";
 			this.#open.clear();
+			this.#turnEnded = true;
 			this.#startTurn();
 		}
 		if (size === this.#offset) return;
@@ -81,9 +87,11 @@ export class Transcript {
 		// Cheap pre-check; large irrelevant lines (e.g. request dumps) are never parsed.
 		const isTask = line.includes('"backgroundTaskId"') || line.includes('"async_launched"') || line.includes('"queue-operation"');
 		const isMessage = line.includes('"type":"assistant"') || line.includes('"type":"user"');
-		if (!isTask && !isMessage) return;
+		const isTurnEnd = line.includes('"stop_hook_summary"');
+		if (!isTask && !isMessage && !isTurnEnd) return;
 		const entry = JSON.parse(line) as {
 			type?: string;
+			subtype?: string;
 			operation?: string;
 			content?: unknown;
 			timestamp?: string;
@@ -94,10 +102,16 @@ export class Transcript {
 		};
 		if (entry.isSidechain === true) return;
 
+		if (entry.type === "system") {
+			if (entry.subtype === "stop_hook_summary") this.#turnEnded = true;
+			return;
+		}
+
 		if (entry.type === "queue-operation") {
 			if (entry.operation !== "enqueue") {
-				// A queued notification was picked up: Claude is working again.
-				this.#startTurn();
+				// A queued notification was picked up after the turn ended: Claude is working again.
+				// Picked up mid-turn (e.g. right after the closing box), it belongs to the running turn and must not clear its question.
+				if (this.#turnEnded) this.#startTurn();
 			} else if (typeof entry.content === "string") {
 				// Only notifications carrying a status end a task; progress notifications have none.
 				const id = /<task-id>([^<]+)<\/task-id>/.exec(entry.content)?.[1];
@@ -120,6 +134,7 @@ export class Transcript {
 			return;
 		}
 
+		if (entry.type === "assistant") this.#turnEnded = false;
 		if (entry.type === "assistant" && Array.isArray(entry.message?.content)) {
 			for (const block of entry.message.content as ContentBlock[]) {
 				if (block.type === "text" && block.text?.trim()) {
