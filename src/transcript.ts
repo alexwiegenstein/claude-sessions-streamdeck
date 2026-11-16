@@ -6,7 +6,7 @@ import { promisify } from "node:util";
 
 const run = promisify(execFile);
 
-/** Sitzungsprotokolle der CLI: `<Projekt>/<sessionId>.jsonl`, eine JSON-Zeile je Ereignis. */
+/** Session transcripts written by the CLI: `<project>/<sessionId>.jsonl`, one JSON line per event. */
 const PROJECTS_DIR = join(homedir(), ".claude", "projects");
 const CHUNK_BYTES = 4 * 1024 * 1024;
 
@@ -14,26 +14,27 @@ type Task = { kind: "shell" | "agent"; startedAt: number };
 
 type ContentBlock = { type?: string; name?: string; text?: string; input?: Record<string, unknown> };
 
-/** Werkzeug, mit dem Claude in der Desktop-App eine Runde abschließt; `ask` ist die Frage an den Menschen. */
+/** Tool Claude uses in the desktop app to close a turn; `ask` is its question to the person. */
 const WRAP_UP_TOOL = "mcp__ccd_turn__wrap_up";
 
 /**
- * Liest das Protokoll einer Session fortlaufend mit. Der Statuseintrag der CLI kennt nur die Hauptsession
- * und nur Dialoge; zwei Dinge stehen allein hier:
- * - welche Hintergrundaufgaben (Shell-Befehle und Sub-Agents) gestartet, aber noch nicht beendet sind,
- * - ob die letzte Runde mit einer Frage an den Menschen geendet hat.
+ * Follows the transcript of one session. The CLI's status record only knows about the main session
+ * and about dialogs; two things are recorded here alone:
+ * - which background tasks (shell commands and subagents) were started but have not finished yet,
+ * - whether the last turn ended with a question to the person.
  */
 export class Transcript {
 	#offset = 0;
 	#partial = "";
 	readonly #open = new Map<string, Task>();
-	/** Seit dem letzten Rundenbeginn: Frage in der Abschluss-Box gestellt? */
+	/** Since the current turn began: was a question asked in the closing box? */
 	#asked = false;
-	/** Seit dem letzten Rundenbeginn: letzter Antworttext der Hauptsession. */
+	/** Since the current turn began: the main session's last answer text. */
 	#lastText = "";
 
 	constructor(readonly path: string) {}
 
+	/** Reads whatever was appended to the transcript since the last call. */
 	async update(): Promise<void> {
 		const { size } = await stat(this.path);
 		if (size < this.#offset) {
@@ -60,12 +61,12 @@ export class Transcript {
 		}
 	}
 
-	/** Offene Aufgaben, die nach `since` gestartet wurden (ältere gehören zu einem früheren Prozess und sind mit ihm beendet). */
+	/** Open tasks started after `since`; older ones belonged to a previous process and ended with it. */
 	openTasks(since: number): Task[] {
 		return [...this.#open.values()].filter((task) => task.startedAt >= since);
 	}
 
-	/** Ob die letzte Runde mit einer offenen Frage endete: per Abschluss-Box oder als Schlusssatz mit Fragezeichen. */
+	/** Whether the last turn ended with an open question: in the closing box, or as a final sentence ending in a question mark. */
 	endsWithQuestion(): boolean {
 		return this.#asked || /\?["“”»)*_`\s]*$/.test(this.#lastText);
 	}
@@ -75,9 +76,9 @@ export class Transcript {
 		this.#lastText = "";
 	}
 
-	/** Verarbeitet eine Protokollzeile. */
+	/** Processes one transcript line. */
 	apply(line: string): void {
-		// Billige Vorprüfung; große Zeilen ohne Belang (z. B. Anfrage-Mitschnitte) werden nicht geparst.
+		// Cheap pre-check; large irrelevant lines (e.g. request dumps) are never parsed.
 		const isTask = line.includes('"backgroundTaskId"') || line.includes('"async_launched"') || line.includes('"queue-operation"');
 		const isMessage = line.includes('"type":"assistant"') || line.includes('"type":"user"');
 		if (!isTask && !isMessage) return;
@@ -95,10 +96,10 @@ export class Transcript {
 
 		if (entry.type === "queue-operation") {
 			if (entry.operation !== "enqueue") {
-				// Eine eingereihte Meldung wurde abgeholt: Claude arbeitet wieder.
+				// A queued notification was picked up: Claude is working again.
 				this.#startTurn();
 			} else if (typeof entry.content === "string") {
-				// Nur Meldungen mit Status beenden eine Aufgabe; Zwischenmeldungen tragen keinen.
+				// Only notifications carrying a status end a task; progress notifications have none.
 				const id = /<task-id>([^<]+)<\/task-id>/.exec(entry.content)?.[1];
 				if (id && /<status>[^<]+<\/status>/.test(entry.content)) this.#open.delete(id);
 			}
@@ -114,7 +115,7 @@ export class Transcript {
 			}
 			const content = entry.message?.content;
 			const isPrompt = typeof content === "string" || (Array.isArray(content) && (content as ContentBlock[]).some((block) => block.type === "text"));
-			// Eine neue Nachricht des Menschen beantwortet die offene Frage.
+			// A new message from the person answers the open question.
 			if (isPrompt && entry.isMeta !== true) this.#startTurn();
 			return;
 		}
@@ -128,7 +129,7 @@ export class Transcript {
 				} else if (block.type === "tool_use" && block.name === "TaskStop" && block.input) {
 					for (const value of Object.values(block.input)) if (typeof value === "string") this.#open.delete(value);
 				} else if (block.type === "tool_use") {
-					// Nach dem letzten Text wurde weitergearbeitet: Er war nicht das Schlusswort.
+					// Work continued after the last text, so it was not the closing message.
 					this.#lastText = "";
 				}
 			}
@@ -162,7 +163,7 @@ async function hasChildProcesses(pid: number): Promise<boolean> {
 		await run("/usr/bin/pgrep", ["-P", String(pid)]);
 		return true;
 	} catch (err) {
-		// pgrep endet mit 1, wenn es keinen Kindprozess gibt.
+		// pgrep exits with 1 when there is no child process.
 		if ((err as { code?: unknown }).code === 1) return false;
 		throw err;
 	}
@@ -171,8 +172,8 @@ async function hasChildProcesses(pid: number): Promise<boolean> {
 export type TranscriptFindings = { backgroundWork: boolean; question: boolean };
 
 /**
- * Was das Protokoll über eine ruhende Session verrät. `startedAt` ist der Start des CLI-Prozesses `pid`.
- * Shell-Aufgaben sind Kindprozesse der CLI: Gibt es keine mehr, sind sie beendet, auch ohne Abschlussmeldung.
+ * What the transcript reveals about an idle session. `startedAt` is the start time of the CLI process `pid`.
+ * Shell tasks are child processes of the CLI: once there are none left, they have ended, even without a notification.
  */
 export async function inspectTranscript(sessionId: string, pid: number, startedAt: number): Promise<TranscriptFindings> {
 	const transcript = await findTranscript(sessionId);
@@ -183,7 +184,7 @@ export async function inspectTranscript(sessionId: string, pid: number, startedA
 	return { backgroundWork, question: transcript.endsWithQuestion() };
 }
 
-/** Gibt die Protokolle beendeter Sessions frei. */
+/** Drops the transcripts of sessions that are no longer running. */
 export function forgetTranscriptsExcept(sessionIds: Set<string>): void {
 	for (const id of transcripts.keys()) if (!sessionIds.has(id)) transcripts.delete(id);
 }

@@ -2,17 +2,17 @@ import { readdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-import { forgetTranscriptsExcept, inspectTranscript } from "./background.js";
+import { forgetTranscriptsExcept, inspectTranscript } from "./transcript.js";
 
-/** Verzeichnis, in dem jede laufende Claude-Code-Instanz ihren Stand als `<pid>.json` ablegt. */
+/** Directory where every running Claude Code instance keeps its state as `<pid>.json`. */
 const CLI_SESSIONS_DIR = join(homedir(), ".claude", "sessions");
-/** Sitzungsdateien der Desktop-App; liefern, wann eine Session zuletzt angesehen wurde. */
+/** Session files of the desktop app; they record when a session was last looked at. */
 const DESKTOP_SESSIONS_DIR = join(homedir(), "Library", "Application Support", "Claude", "claude-code-sessions");
 
 export type SessionState = "running" | "question" | "permission" | "done" | "seen";
 
 export type Session = {
-	/** ID der Desktop-Session (`local_…`), Ziel des Deep-Links. */
+	/** ID of the desktop session (`local_…`), the target of the deep link. */
 	id: string;
 	title: string;
 	state: SessionState;
@@ -21,7 +21,7 @@ export type Session = {
 
 type CliRecord = {
 	pid: number;
-	/** ID der CLI-Session; so heißt auch ihr Protokoll. */
+	/** ID of the CLI session; its transcript carries the same name. */
 	sessionId: string;
 	kind?: string;
 	spare?: boolean;
@@ -47,7 +47,7 @@ function isAlive(pid: number): boolean {
 	}
 }
 
-/** Liest eine JSON-Datei; `undefined`, wenn sie verschwunden ist oder gerade geschrieben wird. */
+/** Reads a JSON file; `undefined` if it has disappeared or is being written right now. */
 async function readJson<T>(path: string): Promise<T | undefined> {
 	let text: string;
 	try {
@@ -87,7 +87,7 @@ async function findDesktopFile(hostSessionId: string): Promise<string | undefine
 
 type DesktopRecord = { lastFocusedAt?: number; lastActivityAt?: number; isArchived?: boolean };
 
-/** Was die Desktop-App zur Session vermerkt hat: archiviert, zuletzt im Vordergrund, zuletzt aktiv. */
+/** What the desktop app recorded about the session: archived, last in the foreground, last active. */
 async function readDesktopRecord(hostSessionId: string): Promise<DesktopRecord | undefined> {
 	const path = await findDesktopFile(hostSessionId);
 	if (!path) return undefined;
@@ -112,9 +112,9 @@ function toState(record: CliRecord, desktop: DesktopRecord | undefined): Session
 }
 
 /**
- * Die aktuellen Sessions der Claude-Desktop-App, älteste zuerst (stabile Reihenfolge auf den Tasten).
- * Angesehene, ruhende Sessions zählen nur, solange ihre letzte Aktivität höchstens `recentMs` zurückliegt,
- * auch wenn ihre letzte Runde mit einer Frage endete. Was läuft, in einem Dialog wartet oder ungesehen ist, zählt immer.
+ * The current sessions of the Claude desktop app, oldest first (a stable order on the keys).
+ * Idle sessions that have been looked at only count while their last activity is at most `recentMs` ago,
+ * even if their last turn ended with a question. Anything running, waiting in a dialog or not yet seen always counts.
  */
 export async function loadSessions(recentMs: number): Promise<Session[]> {
 	const files = (await readdir(CLI_SESSIONS_DIR)).filter((name) => /^\d+\.json$/.test(name));
@@ -133,10 +133,10 @@ export async function loadSessions(recentMs: number): Promise<Session[]> {
 		if (state === "done" || state === "seen") {
 			const { backgroundWork, question } = await inspectTranscript(record.sessionId, record.pid, record.startedAt);
 			const stale = state === "seen" && Date.now() - (desktop?.lastActivityAt ?? record.startedAt) > recentMs;
-			// Die Runde endete mit einer Frage an den Menschen; der Statuseintrag der CLI meldet das nicht.
-			// Das geht vor: Auch wenn im Hintergrund noch etwas läuft, wartet Claude auf eine Antwort.
+			// The turn ended with a question to the person; the CLI's status record does not report that.
+			// This takes precedence: even with background work still running, Claude is waiting for an answer.
 			if (question && !stale) state = "question";
-			// Die Hauptsession ruht, aber Hintergrundaufgaben arbeiten noch: nicht fertig.
+			// The main session is idle, but background tasks are still working: not done.
 			else if (backgroundWork) state = "running";
 			else if (stale) continue;
 		}

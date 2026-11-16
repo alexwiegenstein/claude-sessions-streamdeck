@@ -3,52 +3,60 @@ import { promisify } from "node:util";
 
 import streamDeck, { type KeyDownEvent, SingletonAction, type WillAppearEvent, type WillDisappearEvent } from "@elgato/streamdeck";
 
-import { renderEmpty, renderSession } from "./render.js";
+import { isLanguage, type Language, renderEmpty, renderSession } from "./render.js";
 import { loadSessions, NEW_SESSION_URL, type Session, sessionUrl } from "./sessions.js";
 
 const run = promisify(execFile);
-/** Takt der Anzeige (Pulsieren, Laufbalken); die Sessions werden einmal pro Sekunde neu gelesen. */
+/** Display tick (pulse, progress bar); sessions are re-read once per second. */
 const TICK_MS = 125;
 const TICKS_PER_LOAD = 8;
-const DEFAULT_RECENT_HOURS = 8;
 
-/** Für alle Tasten gemeinsam; wird in den Tasteneinstellungen gesetzt. */
-type GlobalSettings = { recentHours?: number };
+/** Shared by all keys; set in the key's settings in the Stream Deck app. */
+type GlobalSettings = { recentHours?: number; language?: string };
 
-function toRecentHours(settings: GlobalSettings): number {
-	const hours = settings.recentHours;
-	if (hours === undefined) return DEFAULT_RECENT_HOURS;
-	if (typeof hours !== "number" || !Number.isFinite(hours) || hours < 0) throw new Error(`Ungültige Frist: ${JSON.stringify(hours)}`);
-	return hours;
+type Config = {
+	/** How long an idle session that has been looked at still counts as current. */
+	recentHours: number;
+	/** Language of the words on the keys. */
+	language: Language;
+};
+
+const DEFAULTS: Config = { recentHours: 8, language: "en" };
+
+function toConfig(settings: GlobalSettings): Config {
+	const { recentHours = DEFAULTS.recentHours, language = DEFAULTS.language } = settings;
+	if (typeof recentHours !== "number" || !Number.isFinite(recentHours) || recentHours < 0) throw new Error(`Invalid recentHours setting: ${JSON.stringify(recentHours)}`);
+	if (!isLanguage(language)) throw new Error(`Invalid language setting: ${JSON.stringify(language)}`);
+	return { recentHours, language };
 }
 
 /**
- * Eine Taste = ein Platz. Alle sichtbaren Tasten dieser Aktion werden zeilenweise
- * (oben links zuerst) mit den laufenden Sessions gefüllt, älteste zuerst.
+ * One key = one slot. All visible keys of this action are filled row by row
+ * (top left first) with the running sessions, oldest first.
  */
 export class SessionAction extends SingletonAction {
-	override readonly manifestId = "pro.identic.claude-sessions.session";
+	override readonly manifestId = "com.alexwiegenstein.claude-sessions.session";
 
 	#timer: NodeJS.Timeout | undefined;
 	#tick = 0;
 	#refreshing = false;
 	#sessions: Session[] = [];
-	/** Wie lange eine angesehene, ruhende Session noch als aktuell gilt; `undefined` bis die Einstellungen geladen sind. */
-	#recentHours: number | undefined;
+	/** `undefined` until the settings have been loaded. */
+	#config: Config | undefined;
+	/** Last image set and the session assigned, per key ID. */
+	readonly #shown = new Map<string, { image: string; session: Session | undefined }>();
 
 	constructor() {
 		super();
 		streamDeck.settings.onDidReceiveGlobalSettings<GlobalSettings>((ev) => {
-			this.#recentHours = toRecentHours(ev.settings);
-			this.#tick = 0; // nächster Takt liest die Sessions neu
+			this.#config = toConfig(ev.settings);
+			this.#tick = 0; // the next tick re-reads the sessions
 			void this.#refresh();
 		});
 	}
-	/** Zuletzt gesetztes Bild und zugeordnete Session je Tasten-ID. */
-	readonly #shown = new Map<string, { image: string; session: Session | undefined }>();
 
 	override async onWillAppear(_ev: WillAppearEvent): Promise<void> {
-		this.#recentHours ??= toRecentHours(await streamDeck.settings.getGlobalSettings<GlobalSettings>());
+		this.#config ??= toConfig(await streamDeck.settings.getGlobalSettings<GlobalSettings>());
 		this.#timer ??= setInterval(() => void this.#refresh(), TICK_MS);
 		await this.#refresh();
 	}
@@ -66,16 +74,17 @@ export class SessionAction extends SingletonAction {
 		try {
 			await run("/usr/bin/open", [session ? sessionUrl(session.id) : NEW_SESSION_URL]);
 		} catch (err) {
-			streamDeck.logger.error("Claude konnte nicht geöffnet werden", err);
+			streamDeck.logger.error("Could not open Claude", err);
 			await ev.action.showAlert();
 		}
 	}
 
 	async #refresh(): Promise<void> {
-		if (this.#refreshing || this.#recentHours === undefined) return;
+		const config = this.#config;
+		if (this.#refreshing || config === undefined) return;
 		this.#refreshing = true;
 		try {
-			if (this.#tick++ % TICKS_PER_LOAD === 0) this.#sessions = await loadSessions(this.#recentHours * 3_600_000);
+			if (this.#tick++ % TICKS_PER_LOAD === 0) this.#sessions = await loadSessions(config.recentHours * 3_600_000);
 			const sessions = this.#sessions;
 			const keys = [...this.actions]
 				.filter((a) => a.isKey())
@@ -89,12 +98,12 @@ export class SessionAction extends SingletonAction {
 				const slot = slotByDevice.get(key.device.id) ?? 0;
 				slotByDevice.set(key.device.id, slot + 1);
 				const session = sessions[slot];
-				const image = session ? renderSession(session, this.#tick) : renderEmpty();
+				const image = session ? renderSession(session, this.#tick, config.language) : renderEmpty(config.language);
 				if (this.#shown.get(key.id)?.image !== image) await key.setImage(image);
 				this.#shown.set(key.id, { image, session });
 			}
 		} catch (err) {
-			streamDeck.logger.error("Sessions konnten nicht gelesen werden", err);
+			streamDeck.logger.error("Could not read the sessions", err);
 			for (const key of this.actions) if (key.isKey()) await key.showAlert();
 		} finally {
 			this.#refreshing = false;

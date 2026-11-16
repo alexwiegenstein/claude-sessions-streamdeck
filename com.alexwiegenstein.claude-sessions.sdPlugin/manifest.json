@@ -1,10 +1,11 @@
 {
 	"$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
-	"UUID": "pro.identic.claude-sessions",
+	"UUID": "com.alexwiegenstein.claude-sessions",
 	"Name": "Claude Sessions",
 	"Version": "0.1.0.0",
-	"Author": "IDENTIC",
-	"Description": "Zeigt den Stand deiner Claude-Sessions (läuft, fertig, Rückfrage) und öffnet sie per Tastendruck in der Claude-Desktop-App.",
+	"Author": "Alex Wiegenstein",
+	"URL": "https://github.com/alexwiegenstein/claude-sessions-streamdeck",
+	"Description": "Shows the state of your Claude sessions (running, done, question) and opens them in the Claude desktop app at the press of a key. Unofficial; not affiliated with Anthropic.",
 	"Category": "Claude Sessions",
 	"CategoryIcon": "imgs/category",
 	"Icon": "imgs/plugin",
@@ -15,9 +16,9 @@
 	"Nodejs": { "Version": "20" },
 	"Actions": [
 		{
-			"UUID": "pro.identic.claude-sessions.session",
+			"UUID": "com.alexwiegenstein.claude-sessions.session",
 			"Name": "Claude Session",
-			"Tooltip": "Zeigt eine Claude-Session und öffnet sie in der Desktop-App. Mehrere Tasten füllen sich der Reihe nach.",
+			"Tooltip": "Shows one Claude session and opens it in the desktop app. Several keys fill up in order.",
 			"Icon": "imgs/action",
 			"PropertyInspectorPath": "ui/session.html",
 			"Controllers": ["Keypad"],
