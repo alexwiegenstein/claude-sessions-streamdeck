@@ -1,0 +1,22 @@
+{
+  "name": "claude-sessions-streamdeck",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit && esbuild src/plugin.ts --bundle --platform=node --format=esm --target=node20 --sourcemap --outfile=pro.identic.claude-sessions.sdPlugin/bin/plugin.js --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" && echo '{ \"type\": \"module\" }' > pro.identic.claude-sessions.sdPlugin/bin/package.json",
+    "watch": "esbuild src/plugin.ts --bundle --platform=node --format=esm --target=node20 --sourcemap --outfile=pro.identic.claude-sessions.sdPlugin/bin/plugin.js --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --watch",
+    "link": "streamdeck link pro.identic.claude-sessions.sdPlugin",
+    "restart": "streamdeck restart pro.identic.claude-sessions",
+    "validate": "streamdeck validate pro.identic.claude-sessions.sdPlugin"
+  },
+  "dependencies": {
+    "@elgato/streamdeck": "^3.0.4"
+  },
+  "devDependencies": {
+    "@elgato/cli": "^1.10.4",
+    "@types/node": "^20.19.43",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2"
+  }
+}

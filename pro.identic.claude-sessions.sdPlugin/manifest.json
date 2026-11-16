@@ -1,0 +1,29 @@
+{
+	"$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
+	"UUID": "pro.identic.claude-sessions",
+	"Name": "Claude Sessions",
+	"Version": "0.1.0.0",
+	"Author": "IDENTIC",
+	"Description": "Zeigt den Stand deiner Claude-Sessions (läuft, fertig, Rückfrage) und öffnet sie per Tastendruck in der Claude-Desktop-App.",
+	"Category": "Claude Sessions",
+	"CategoryIcon": "imgs/category",
+	"Icon": "imgs/plugin",
+	"CodePath": "bin/plugin.js",
+	"SDKVersion": 2,
+	"Software": { "MinimumVersion": "7.1" },
+	"OS": [{ "Platform": "mac", "MinimumVersion": "12" }],
+	"Nodejs": { "Version": "20" },
+	"Actions": [
+		{
+			"UUID": "pro.identic.claude-sessions.session",
+			"Name": "Claude Session",
+			"Tooltip": "Zeigt eine Claude-Session und öffnet sie in der Desktop-App. Mehrere Tasten füllen sich der Reihe nach.",
+			"Icon": "imgs/action",
+			"PropertyInspectorPath": "ui/session.html",
+			"Controllers": ["Keypad"],
+			"DisableAutomaticStates": true,
+			"UserTitleEnabled": false,
+			"States": [{ "Image": "imgs/key", "ShowTitle": false }]
+		}
+	]
+}
