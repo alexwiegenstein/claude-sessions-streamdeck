@@ -11,7 +11,8 @@
     "watch": "esbuild src/plugin.ts --bundle --platform=node --format=esm --target=node20 --sourcemap --outfile=com.alexwiegenstein.claude-sessions.sdPlugin/bin/plugin.js --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --watch",
     "link": "streamdeck link com.alexwiegenstein.claude-sessions.sdPlugin",
     "restart": "streamdeck restart com.alexwiegenstein.claude-sessions",
-    "validate": "streamdeck validate com.alexwiegenstein.claude-sessions.sdPlugin"
+    "validate": "streamdeck validate com.alexwiegenstein.claude-sessions.sdPlugin",
+    "pack": "npm run build && streamdeck pack com.alexwiegenstein.claude-sessions.sdPlugin --output dist --force"
   },
   "dependencies": {
     "@elgato/streamdeck": "^3.0.4"

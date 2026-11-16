@@ -11,9 +11,18 @@
 	"Icon": "imgs/plugin",
 	"CodePath": "bin/plugin.js",
 	"SDKVersion": 2,
-	"Software": { "MinimumVersion": "7.1" },
-	"OS": [{ "Platform": "mac", "MinimumVersion": "12" }],
-	"Nodejs": { "Version": "20" },
+	"Software": {
+		"MinimumVersion": "7.1"
+	},
+	"OS": [
+		{
+			"Platform": "mac",
+			"MinimumVersion": "12"
+		}
+	],
+	"Nodejs": {
+		"Version": "20"
+	},
 	"Actions": [
 		{
 			"UUID": "com.alexwiegenstein.claude-sessions.session",
@@ -21,10 +30,17 @@
 			"Tooltip": "Shows one Claude session and opens it in the desktop app. Several keys fill up in order.",
 			"Icon": "imgs/action",
 			"PropertyInspectorPath": "ui/session.html",
-			"Controllers": ["Keypad"],
+			"Controllers": [
+				"Keypad"
+			],
 			"DisableAutomaticStates": true,
 			"UserTitleEnabled": false,
-			"States": [{ "Image": "imgs/key", "ShowTitle": false }]
+			"States": [
+				{
+					"Image": "imgs/key",
+					"ShowTitle": false
+				}
+			]
 		}
 	]
 }

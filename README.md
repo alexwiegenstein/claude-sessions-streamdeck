@@ -45,9 +45,19 @@ The action is an ordinary key action, so it should work on any Stream Deck with 
 
 The Neo's touch points and info bar and the Stream Deck +'s dials and touch strip are not used. The Stream Deck Pedal has no displays, so the plugin is of no use there.
 
-## Setup
+## Install
 
-The plugin is not in the Elgato Marketplace; you build it from source and link it.
+The plugin is not in the Elgato Marketplace. Download the ready-made build instead:
+
+1. Download `com.alexwiegenstein.claude-sessions.streamDeckPlugin` from the [latest release](https://github.com/alexwiegenstein/claude-sessions-streamdeck/releases/latest).
+2. Double-click the file. The Stream Deck app opens and asks whether to install the plugin.
+3. Drag the action **Claude Session** from the category **Claude Sessions** onto as many keys as you want sessions visible at once.
+
+A plugin installed this way does not update itself. To update, download the newer release and double-click it again.
+
+### Build from source
+
+If you want to change the plugin, build and link it yourself:
 
 ```bash
 git clone https://github.com/alexwiegenstein/claude-sessions-streamdeck.git
@@ -66,8 +76,6 @@ npm run link
 ```
 
 Then quit and reopen the Stream Deck app once so it loads the plugin.
-
-In the Stream Deck app you will find the action **Claude Session** in the category **Claude Sessions**. Drag it onto as many keys as you want sessions visible at once.
 
 ### Settings
 
@@ -123,7 +131,7 @@ npm run build
 npm run restart
 ```
 
-`npm run restart` reloads the plugin in the running Stream Deck app and requires its developer mode, which you enable once with `npx streamdeck dev`. `npm run watch` rebuilds on every change, `npm run validate` checks the manifest.
+`npm run restart` reloads the plugin in the running Stream Deck app and requires its developer mode, which you enable once with `npx streamdeck dev`. `npm run watch` rebuilds on every change, `npm run validate` checks the manifest, and `npm run pack` writes the installable `.streamDeckPlugin` file to `dist/`.
 
 | File | Purpose |
 |---|---|
